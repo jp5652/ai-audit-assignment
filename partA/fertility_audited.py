@@ -150,9 +150,9 @@ def main():
         for lang in langs[1:]:
             sem_ratio = results[lang]["tok_per_sentence"] / base_tok_sent
             word_ratio = results[lang]["tok_per_word"] / base_tok_word
-            print(
-                f"{lang:<6}{sem_ratio:<30.2f}x{word_ratio:<25.2f}x"
-            )
+            sem_str = f"{sem_ratio:.2f}x"
+            word_str = f"{word_ratio:.2f}x"
+            print(f"{lang:<6}{sem_str:<30}{word_str:<25}")
 
 
 if __name__ == "__main__":
