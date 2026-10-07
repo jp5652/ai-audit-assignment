@@ -1,6 +1,31 @@
 #!/usr/bin/env python3
 """
-capacity_calculations.py -- Reproduces and verifies all Part B capacity calculations.
+========================================================================================
+ASSIGNMENT PART B — Serving Capacity Reconciliation & Verification
+========================================================================================
+QUESTIONS ANSWERED IN THIS SCRIPT:
+- Calculate KV-cache memory per token (exact bytes).
+- Calculate maximum concurrent 4096-token sequences this GPU can hold.
+- Check whether those calculations match the actual benchmark log.
+- Explain why a particular long-context throughput result is anomalous.
+- Explain whether the claim that longer prompts give better throughput is actually true.
+- Explain whether batch 48 ≈ 3200 tok/s is actually justified.
+- Derive honest goodput for batch-24 long-prompt row using two independent ways.
+
+CORE QUESTION:
+"Can we actually trust the previous GPU capacity and throughput conclusions?"
+----------------------------------------------------------------------------------------
+SUMMARY OF SOLUTIONS:
+1. KV-cache bytes/token = 2 * 28 layers * 8 heads * 128 dim * 2 bytes = 114,688 bytes (112 KiB).
+2. Available KV memory on 24 GB L4 at 0.92 util (minus 8.4 GB weights & 1.6 GB overhead) = 12.08 GB.
+3. Max 4096-token concurrency = 12.08 GB / (114,688 * 4096) = 25.71 ≈ 25 sequences!
+   -> Perfectly matches bench_log.csv (batches 32 & 48 cap at exactly 25 active sequences).
+4. Long-prompt anomaly: Throughput collapses above batch 24 due to memory exhaustion (0.97 util)
+   triggering scheduler preemptions (7 and 23 sequences) and re-prefill thrashing.
+5. Column misread: reported_tok_s included prefill tokens (87.5% of total).
+   Honest goodput is ~201 to 250 tok/s (~8x lower than reported 1607 tok/s).
+   Extrapolating to batch 48 (3200 tok/s) was completely invalid.
+========================================================================================
 """
 
 import csv
@@ -10,6 +35,13 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 
 def calculate_b1():
+    """
+    QUESTION:
+    From model_spec.md alone, compute:
+      (a) KV-cache bytes per token, exactly;
+      (b) Approximate maximum number of concurrent 4096-token sequences this GPU can hold.
+    Then check your prediction against the log.
+    """
     print("=" * 70)
     print("PART B1: KV-Cache Sizing & Concurrency Limit")
     print("=" * 70)
@@ -31,10 +63,6 @@ def calculate_b1():
     print(f"    = {kv_bytes_per_token:,} bytes ({kv_kib_per_token:.1f} KiB)\n")
 
     # (b) Max concurrent 4096-token sequences
-    # Total GPU RAM: 24 GB
-    # Hardware config: gpu_memory_utilization = 0.92
-    # Weights: 4.2B params * 2 bytes = 8.4 GB
-    # Non-KV overhead: 1.6 GB
     gpu_total_ram_bytes = 24 * (10**9)  # 24 GB decimal
     gpu_total_ram_gib = 24 * (1024**3)  # 24 GiB binary
 
@@ -91,6 +119,11 @@ def calculate_b1():
 
 
 def calculate_b3():
+    """
+    QUESTION:
+    Find the column misread in REPORT_v0.md.
+    Derive honest goodput of the batch-24 long-prompt row using two independent ways.
+    """
     print("\n" + "=" * 70)
     print("PART B3: Honest Goodput Derivation (Batch 24, Long Prompt)")
     print("=" * 70)

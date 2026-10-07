@@ -1,10 +1,48 @@
 #!/usr/bin/env python3
 """
-run_audit_experiments.py -- Audits fertility.py with exact empirical evidence.
+========================================================================================
+ASSIGNMENT PART A — Audit fertility.py & Empirical Flaw Isolation
+========================================================================================
+QUESTION:
+"Audit fertility.py:
+ - Find actual code bugs.
+ - Find at least one conceptual/metric problem where the code technically works but
+   measures the wrong thing.
+ - Also identify something that looks suspicious but is actually correct.
+ - Prove every claimed problem using measurements."
 
-Tests and measures every claimed bug, the suspicious-looking benign features,
-and the conceptual metric problems.
-Outputs exact before/after numbers, delta %, and one-sentence explanations.
+CORE QUESTION:
+"Does our tokenizer really behave worse/better for different languages, and are we
+measuring that fairly?"
+----------------------------------------------------------------------------------------
+SOLUTIONS TESTED & MEASURED IN THIS SCRIPT:
+1. BUG 1 (Code Bug): line.split(" ") vs line.split()
+   - Problem: Literal space splitting produces empty strings "" on consecutive spaces
+     (e.g., line 7 in eng_sample.txt "books  in", line 10 in hin_sample.txt "किताबें  अलमारी").
+   - Effect: Inflates word count (denominator), artificially depressing fertility by 1.4-2.0%.
+
+2. BUG 2 (Code Bug / Distortion): line = line.lower()
+   - Problem: GPT-2 BPE vocabulary contains dedicated tokens for capitalized acronyms
+     and proper nouns (NASA, ISRO, GPU, Quarterly). Lowercasing forces subword splits.
+   - Conceptual Flaw: Indic scripts (Devanagari, Kannada, Tamil, Telugu) have NO letter casing.
+   - Effect: Selectively penalized English by +3.12% token inflation while doing 0.0% to Hindi!
+
+3. BUG 3 (Statistical / Conceptual Aggregation Trap): Macro vs Micro Average
+   - Problem: sum(per_line_fertility) / n computes the unweighted mean of line ratios,
+     suffering from Jensen's inequality / ratio-estimator bias on short outlier sentences.
+   - Solution: Serving capacity requires total tokens / total units (micro-average).
+
+4. SUSPICIOUS FEATURE 1 (Actually Correct): unicodedata.normalize("NFC", line)
+   - Suspicion: An auditor might suspect modifying text alters Indic characters or corrupts data.
+   - Ground Truth: Indic text online often has decomposed combining characters (NFD, e.g., nuktas).
+     Without NFC, decomposed text doubles byte counts and increases token fragments by up to 100%!
+     NFC is standard Unicode (UAX #15) and protects Indic text from token fragmentation.
+
+5. SUSPICIOUS FEATURE 2 (Actually Correct): add_special_tokens=False
+   - Suspicion: Models run with BOS/EOS, so shouldn't we add them?
+   - Ground Truth: BOS/EOS adds an arbitrary constant offset (+1 or +2) that inflates short
+     sentences by >21%. Excluding them measures intrinsic vocabulary efficiency.
+========================================================================================
 """
 
 import os
@@ -34,11 +72,12 @@ def load_lines(path, normalize_nfc=True):
 
 def run_experiment_1_split():
     """
+    QUESTION REQUIREMENT: Find actual code bugs & prove with measurements.
     BUG 1: line.split(' ') vs line.split()
-    Demonstrates impact of consecutive spaces creating empty strings.
+    Demonstrates impact of consecutive spaces creating empty strings in word count.
     """
     print("\n" + "="*70)
-    print("EXPERIMENT 1: line.split(' ') vs line.split()")
+    print("EXPERIMENT 1: line.split(' ') vs line.split() [CODE BUG]")
     print("="*70)
     
     enc = tiktoken.get_encoding("gpt2")
@@ -71,11 +110,12 @@ def run_experiment_1_split():
 
 def run_experiment_2_lowercase():
     """
+    QUESTION REQUIREMENT: Prove every claimed problem using measurements.
     BUG 2: line.lower() before tokenization
     Demonstrates asymmetric distortion on Latin/English vs Indic text.
     """
     print("\n" + "="*70)
-    print("EXPERIMENT 2: line.lower() Distortion on Tokenization")
+    print("EXPERIMENT 2: line.lower() Distortion on Tokenization [DISTORTION BUG]")
     print("="*70)
     
     enc = tiktoken.get_encoding("gpt2")
@@ -114,11 +154,12 @@ def run_experiment_2_lowercase():
 
 def run_experiment_3_aggregation():
     """
+    QUESTION REQUIREMENT: Conceptual/metric problem where code measures the wrong thing.
     BUG 3: Macro-average (Mean of Ratios) vs Micro-average (Ratio of Totals)
-    Demonstrates ratio-estimator distortion.
+    Demonstrates ratio-estimator distortion and Jensen's inequality trap.
     """
     print("\n" + "="*70)
-    print("EXPERIMENT 3: Macro-average vs Micro-average (Aggregation Trap)")
+    print("EXPERIMENT 3: Macro-average vs Micro-average [METRIC/AGGREGATION TRAP]")
     print("="*70)
     
     enc = tiktoken.get_encoding("gpt2")
@@ -147,11 +188,12 @@ def run_experiment_3_aggregation():
 
 def run_experiment_4_nfc():
     """
-    SUSPICIOUS BUT ACTUALLY CORRECT: unicodedata.normalize('NFC', line)
+    QUESTION REQUIREMENT: Identify something that looks suspicious but is actually correct.
+    FEATURE 1: unicodedata.normalize('NFC', line)
     Demonstrates that NFC prevents catastrophic token explosion on decomposed Unicode text.
     """
     print("\n" + "="*70)
-    print("EXPERIMENT 4: NFC Normalization (Suspicious-looking but Actually Correct)")
+    print("EXPERIMENT 4: NFC Normalization [SUSPICIOUS BUT ACTUALLY CORRECT]")
     print("="*70)
     
     enc = tiktoken.get_encoding("gpt2")
@@ -180,11 +222,12 @@ def run_experiment_4_nfc():
 
 def run_experiment_5_special_tokens():
     """
-    SUSPICIOUS BUT ACTUALLY CORRECT: add_special_tokens=False
+    QUESTION REQUIREMENT: Identify something that looks suspicious but is actually correct.
+    FEATURE 2: add_special_tokens=False
     Demonstrates that adding special tokens skews short sentences.
     """
     print("\n" + "="*70)
-    print("EXPERIMENT 5: add_special_tokens=False (Suspicious-looking but Actually Correct)")
+    print("EXPERIMENT 5: add_special_tokens=False [SUSPICIOUS BUT ACTUALLY CORRECT]")
     print("="*70)
     
     tok = AutoTokenizer.from_pretrained("xlm-roberta-base")

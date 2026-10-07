@@ -1,27 +1,33 @@
 #!/usr/bin/env python3
 """
-fertility_audited.py -- Audited and corrected tokenizer fertility benchmark.
+========================================================================================
+ASSIGNMENT PART A — Audited & Corrected fertility.py Script
+========================================================================================
+QUESTION:
+"Audit fertility.py and replace it with a corrected script.
+ Recompute the analysis using at least 2 tokenizers and at least 2 meaningful denominators.
+ Answer which single number should drive routing and cost decisions."
 
-Fixes all identified bugs in fertility.py:
-  1. Fixes whitespace splitting: Uses line.split() instead of line.split(" ")
-     to avoid empty strings on consecutive spaces.
-  2. Preserves casing: Removed line.lower() to avoid distorting case-sensitive
-     BPE tokenizers (e.g. acronyms and proper nouns).
-  3. Micro-averaging (Ratio of Totals): Reports aggregate micro-averages
-     (total tokens / total units) for accurate serving capacity estimation,
-     alongside macro-averages for per-line variance analysis.
-  4. Preserves NFC normalization: Ensures canonical Unicode representation to
-     prevent token explosion on decomposed text.
-  5. Correct special token handling: add_special_tokens=False to measure text
-     representation without constant-offset sequence biases.
-  6. Multi-denominator support: Computes tokens per parallel sentence
-     (semantic unit), per word, per character, and per UTF-8 byte.
+CORE QUESTION:
+"Does our tokenizer really behave worse/better for different languages, and are we
+measuring that fairly?"
+----------------------------------------------------------------------------------------
+BUGS FIXED IN THIS SCRIPT:
+1. Whitespace Bug Fix: Uses line.split() instead of line.split(" ") to strip consecutive
+   spaces without generating empty strings.
+2. Case Distortion Fix: Removed line.lower() to preserve cased BPE tokens (e.g. acronyms).
+3. Statistical Aggregation Fix: Reports aggregate Micro-averages (total tokens / total units)
+   for serving capacity, alongside Macro-averages.
+4. Preserved NFC Unicode Normalization: Essential to prevent token explosion on decomposed text.
+5. Preserved add_special_tokens=False: Prevents sequence-length constant offset distortion.
+6. Multi-Denominator Support: Computes Tokens/Sentence, Tokens/Word, Tokens/Char, Tokens/Byte.
 
 Usage:
   python fertility_audited.py --corpus eng=corpus/eng.txt \
                              --corpus hin=corpus/hin.txt \
                              --corpus kan=corpus/kan.txt \
                              --tokenizer hf:xlm-roberta-base
+========================================================================================
 """
 
 import argparse
@@ -36,6 +42,7 @@ def load_tokenizer(spec: str):
     if spec.startswith("hf:"):
         from transformers import AutoTokenizer
         tok = AutoTokenizer.from_pretrained(spec[3:])
+        # SUSPICIOUS BUT CORRECT: add_special_tokens=False avoids constant BOS/EOS skew
         return lambda s: tok.encode(s, add_special_tokens=False)
     else:
         import tiktoken
@@ -50,7 +57,7 @@ def read_lines(path: str):
             line = raw.strip()
             if not line:
                 continue
-            # Canonical Unicode NFC normalization is essential for Indic text
+            # SUSPICIOUS BUT CORRECT: NFC normalization is standard Unicode (UAX #15)
             line = unicodedata.normalize("NFC", line)
             lines.append(line)
     return lines
