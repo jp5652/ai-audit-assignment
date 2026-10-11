@@ -185,3 +185,35 @@
   * Path (a) (SFT): Fine-tuning weights risks unmonitored catastrophic forgetting in 4 of 6 languages with no reviewer to catch failures. Disqualified.
   * Path (c) (Prompt Engineering): Zero training risk, zero catastrophic degradation, enables daily iteration starting Day 1. Selected.
 * **Framework Defined:** Assumptions, 480-review arithmetic, 3.8/5.0 casualness threshold, 98% factual preservation guardrail, Day-6 kill criterion, and Day-1 experiment with 4 prompt arms.
+
+---
+
+## Entry 6 (October 11, 2026): Peer Review, Evidence Corrections & Metric Reconciliation
+
+Following internal review and rigorous verification against the evidence rule, several analytical and arithmetic discrepancies were identified and corrected:
+
+### 6.1 NFC Evidence Reconciliation
+* **Finding:** In `partA/run_audit_experiments.py`, our initial explanation asserted that decomposed NFD increases token counts by 50–100%. However, our printed experiment table on sample Devanagari words (`फ़िल्म`, `ज़रूरत`, `क़िला`, `गाड़ी`) showed **identical bytes (18 vs 18) and identical tokens (12 vs 12)** across NFC and NFD.
+* **Correction:** We removed the contradictory narrative. In standard Unicode (UAX #15), Devanagari nukta characters possess composition exclusions, so NFC and NFD maintain identical decomposition under Python's `unicodedata`. Normalizing to NFC is benign (delta = 0).
+* **Primary Defensible Finding:** Our primary empirically verified "suspicious but fine" example is `add_special_tokens=False` (Experiment 5), which demonstrated a real, measured **+21.4% artificial inflation** when special tokens were added.
+
+### 6.2 Serving Goodput Derivation (B3)
+* **Finding:** Our previous write-up presented a goodput range of 201–250 tok/s by dividing batch size by median ITL ($24 / 0.09607\text{s} = 249.8$). However, dividing by median ITL measures instantaneous decode-step rate, not whole-run throughput.
+* **Correction:** We derived goodput using the two agreeing whole-run methods:
+  1. *Generated tokens / wall-clock time:* $(24 \times 512) / 61.16 = \mathbf{200.916 \text{ output tok/s}}$
+  2. *Reported throughput × output token fraction:* $1607.4 \times (512 / 4096) = \mathbf{200.925 \text{ output tok/s}}$
+  Both independent methods agree on **~200.92 output tok/s** (the 0.009 difference is purely harness 1-decimal rounding). Output goodput is ~8× lower than reported total throughput.
+* **Corrected Degradation:** Comparing short vs. long prompt at matched batch size 16: short prompt delivered 294.46 output tok/s; long prompt delivered 163.94 output tok/s. This represents a **44.3% reduction** (correcting our prior "over 70%" estimate).
+
+### 6.3 Serving Preemption Semantics & Latency Discrepancy (B1, B2)
+* **Preempted Sequences:** `preempted_seqs` records sequences preempted at least once, not static simultaneous occupancy. The log is consistent with an approximate ~25-sequence physical capacity, and two-wave completion (122.32s) is a model prediction with batching assumptions.
+* **Latency vs Wall Clock:** In `bench_log.csv`, 12 of 13 rows report `e2e_ms_p95 > wall_clock_s` because client-side harness latency includes connection setup and dispatch, while wall-clock measures the server-side batch window.
+
+### 6.4 Conditional Production Cost Recommendation (A4)
+* **Finding:** XLM-R's 1.25–1.35× ratio disproves a universal 6× script penalty, but cannot be transferred directly to FLM-4B. Our own Qwen2.5 test showed 4.42–6.99× ratios despite a 152k vocabulary.
+* **Correction:** Recommendation memo updated to make capacity planning conditional: leadership must profile FLM-4B's actual tokenizer on representative tasks before setting production multipliers.
+
+### 6.5 Memory Math & Reviewer Budget Corrections (Part C)
+* **KV Memory Math:** Adding 35 prompt tokens per sequence adds $35 \times 112 \text{ KiB} = \mathbf{3.83 \text{ MiB per sequence}}$, totaling $\mathbf{91.88 \text{ MiB}}$ across 24 sequences (correcting the erroneous $0.96\text{ KiB}$ calculation).
+* **Context Limit Tradeoff:** Adding 35 tokens to a 3,584-token prompt generating 512 tokens yields 4,131 tokens, exceeding `max_model_len` (4096). Context must be managed by trimming prompt history or capping generation.
+* **Reviewer Plan & Feasible Fallback:** Day-1 screening requires 120 paired comparisons ($40 \text{ queries} \times 3 \text{ treatment arms} = 120$ pairs = 5.0 hours). The Day-7 fallback to an unbudgeted SFT training run was replaced with a feasible kill action: retain the formal baseline for launch and gate casualization to validated languages. Both memos condensed to $\le 1$ page.

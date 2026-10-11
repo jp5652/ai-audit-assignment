@@ -28,20 +28,20 @@ SOLUTIONS TESTED & MEASURED IN THIS SCRIPT:
    - Effect: Selectively penalized English by +3.12% token inflation while doing 0.0% to Hindi!
 
 3. BUG 3 (Statistical / Conceptual Aggregation Trap): Macro vs Micro Average
-   - Problem: sum(per_line_fertility) / n computes the unweighted mean of line ratios,
-     suffering from Jensen's inequality / ratio-estimator bias on short outlier sentences.
-   - Solution: Serving capacity requires total tokens / total units (micro-average).
+   - Problem: Macro-averaging weights every line equally (sentence-level sample mean),
+     whereas micro-averaging weights every token/word equally across the corpus.
+   - Solution: Serving capacity requires micro-averaging (total tokens / total units)
+     because infrastructure costs scale with total tokens processed.
 
-4. SUSPICIOUS FEATURE 1 (Actually Correct): unicodedata.normalize("NFC", line)
-   - Suspicion: An auditor might suspect modifying text alters Indic characters or corrupts data.
-   - Ground Truth: Indic text online often has decomposed combining characters (NFD, e.g., nuktas).
-     Without NFC, decomposed text doubles byte counts and increases token fragments by up to 100%!
-     NFC is standard Unicode (UAX #15) and protects Indic text from token fragmentation.
+4. SUSPICIOUS FEATURE (Audited): unicodedata.normalize("NFC", line)
+   - Suspicion: An auditor might suspect modifying raw text alters native Indic characters.
+   - Ground Truth: Empirically tested on sample Indic words; NFC produces zero delta
+     on bytes and token counts (delta = 0). It is a benign defensive normalization.
 
-5. SUSPICIOUS FEATURE 2 (Actually Correct): add_special_tokens=False
-   - Suspicion: Models run with BOS/EOS, so shouldn't we add them?
-   - Ground Truth: BOS/EOS adds an arbitrary constant offset (+1 or +2) that inflates short
-     sentences by >21%. Excluding them measures intrinsic vocabulary efficiency.
+5. SUSPICIOUS FEATURE (Actually Correct with Measured Impact): add_special_tokens=False
+   - Suspicion: Models run with BOS/EOS, so shouldn't we include them?
+   - Ground Truth: BOS/EOS adds an arbitrary constant offset (+1 or +2) that artificially
+     inflates short sentence fertility by +21.4%. Excluding them measures intrinsic vocabulary efficiency.
 ========================================================================================
 """
 
@@ -180,25 +180,26 @@ def run_experiment_3_aggregation():
         delta = micro - macro
         pct = (delta / macro) * 100
         print(f"[{name}]")
-        print(f"  Macro-average (mean of ratios): {macro:.4f}")
-        print(f"  Micro-average (ratio of totals): {micro:.4f} (delta: {delta:+.4f}, {pct:+.2f}%)")
+        print(f"  Macro-average (mean of line ratios): {macro:.4f}")
+        print(f"  Micro-average (ratio of totals):     {micro:.4f} (delta: {delta:+.4f}, {pct:+.2f}%)")
         print(f"  Total tokens: {total_toks}, Total words: {total_words}")
-    print("  Explanation: Mean of line ratios gives disproportionate weight to short outlier lines with extreme fertility; serving capacity depends strictly on aggregate micro-average (total tokens / total units).")
+    print("  Explanation: Macro-average weights each sentence equally (answering 'what is the token expansion of an average sentence?'). Micro-average weights each word equally across the full corpus (answering 'what is the aggregate token expansion of the workload?'). For serving capacity planning and billing, micro-average is the appropriate metric because server cost scales with total tokens processed.")
 
 
 def run_experiment_4_nfc():
     """
     QUESTION REQUIREMENT: Identify something that looks suspicious but is actually correct.
-    FEATURE 1: unicodedata.normalize('NFC', line)
-    Demonstrates that NFC prevents catastrophic token explosion on decomposed Unicode text.
+    ANALYSIS OF FEATURE: unicodedata.normalize('NFC', line)
+    An auditor might suspect this line alters native Indic characters or mutates data.
+    We test whether NFC vs NFD introduces any distortion on sample Indic words.
     """
     print("\n" + "="*70)
-    print("EXPERIMENT 4: NFC Normalization [SUSPICIOUS BUT ACTUALLY CORRECT]")
+    print("EXPERIMENT 4: NFC Normalization [AUDIT OF SUSPICIOUS-LOOKING FEATURE]")
     print("="*70)
     
     enc = tiktoken.get_encoding("gpt2")
     
-    # Example text with nukta characters (common in Hindi, Urdu, loanwords)
+    # Test words with nuktas / matras
     test_words = [
         ("फ़िल्म", "film with nukta"),
         ("ज़रूरत", "zarurat with nukta"),
@@ -217,7 +218,8 @@ def run_experiment_4_nfc():
         b_nfd = len(w_nfd.encode("utf-8"))
         print(f"{word:<10}{desc:<20}{b_nfc:<12}{b_nfd:<12}{t_nfc:<10}{t_nfd:<10}")
         
-    print("  Explanation: Although normalizing looks like corpus tampering, NFC is essential in Indic NLP: decomposed NFD text doubles byte counts and increases tokenization fragments by up to 50-100%.")
+    print("  Measured Result: On these sample words, NFC and NFD yield identical byte counts and token counts (delta = 0). Normalizing to NFC does not distort or inflate tokenization (it is completely harmless here).")
+    print("  Note: Our primary empirically verified 'suspicious but actually correct' feature with significant measurable impact is add_special_tokens=False (see Experiment 5).")
 
 
 def run_experiment_5_special_tokens():

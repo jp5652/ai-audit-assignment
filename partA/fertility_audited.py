@@ -95,6 +95,9 @@ def analyze(lines, encode):
         per_line_fert_char.append(n_tok / n_char if n_char > 0 else 0)
 
     n_lines = len(lines)
+    if n_lines == 0:
+        raise ValueError("Corpus is empty: no valid non-empty lines found to analyze.")
+
     micro = {
         "num_lines": n_lines,
         "total_tokens": total_tokens,
@@ -102,9 +105,9 @@ def analyze(lines, encode):
         "total_chars": total_chars,
         "total_bytes": total_bytes,
         "tok_per_sentence": total_tokens / n_lines,
-        "tok_per_word": total_tokens / total_words,
-        "tok_per_char": total_tokens / total_chars,
-        "tok_per_byte": total_tokens / total_bytes,
+        "tok_per_word": total_tokens / total_words if total_words > 0 else 0.0,
+        "tok_per_char": total_tokens / total_chars if total_chars > 0 else 0.0,
+        "tok_per_byte": total_tokens / total_bytes if total_bytes > 0 else 0.0,
     }
     macro = {
         "macro_fert_word": sum(per_line_fert_word) / n_lines,

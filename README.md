@@ -83,10 +83,10 @@ python partB/capacity_calculations.py
 
 ### Part B: Serving Capacity Reconciliation
 * **KV Cache Per Token:** Exactly **114,688 bytes (112 KiB)** in fp16.
-* **Concurrency Ceiling:** Max concurrent 4096-token sequences on 1× NVIDIA L4 (24 GB) is **~25 sequences**, matching `bench_log.csv` (active sequences cap at 25 under preemption).
-* **Throughput Anomaly:** Batches 32 and 48 suffer preemption thrashing (re-evaluating 3,584 prompt tokens from scratch) due to KV memory exhaustion. Capping concurrency at `--max-num-seqs 24` eliminates preemptions and boosts throughput by +23.8%.
-* **Column Misread:** `reported_tok_s` measured total throughput (87.5% was prompt prefill). Honest generation goodput for batch 24 long-prompt is **~201–250 tok/s**, not 1,607 tok/s.
+* **Concurrency Ceiling:** Max concurrent 4096-token sequences on 1× NVIDIA L4 (24 GB) is **~25 sequences**, consistent with `bench_log.csv` (cache saturates at 0.97 with 7 and 23 sequences preempted).
+* **Throughput Anomaly:** Batches 32 and 48 suffer preemption thrashing (re-evaluating 3,584 prompt tokens from scratch) due to KV memory exhaustion. Capping concurrency at `--max-num-seqs 24` eliminates preemptions and preserves peak throughput (~1,607 tok/s).
+* **Column Misread:** `reported_tok_s` measured total throughput (87.5% was prompt prefill). Honest generation goodput for batch 24 long-prompt is **~200.92 output tok/s** (derived via two independent agreeing methods), roughly 8× lower than reported. At matched batch 16, longer prompts reduce output goodput by **44.3%** (from 294.46 to 163.94 tok/s).
 
 ### Part C: Strategic Decision Memo
 * **Selected Path:** **Path (c): Prompt-Engineering Only**.
-* **Why SFT & Rewriter Fail:** SFT suffers from a fatal review blindspot (0 native reviewers for Tamil, Telugu, Bengali, Marathi) and $0 API budget. Modifying weights risks unmonitored catastrophic degradation. Rewriters double latency and memory overhead. Prompt engineering keeps base representations frozen, incurs <5 ms prefill overhead, and enables daily iteration starting on Day 1.
+* **Why SFT & Rewriter Fail:** SFT suffers from a fatal review blindspot (0 native reviewers for Tamil, Telugu, Bengali, Marathi) and $0 API budget. Modifying weights risks unmonitored catastrophic degradation. Rewriters introduce serialized execution overhead and extra memory allocation. Prompt engineering keeps base representations frozen, incurs ~3.83 MiB KV cache per sequence, and enables immediate iteration within our 480-review human budget.
