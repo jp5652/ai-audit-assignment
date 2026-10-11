@@ -45,4 +45,4 @@ When evaluated on 1,012 parallel sentences from the FLORES-200 benchmark across 
 
 **Metric:** **Task-Conditioned Token Expansion Ratio ($R_{\text{task, lang}}$)**
 $$R_{\text{task, lang}} = \frac{\text{P50 (Prompt + Completion Tokens)}_{\text{Indic, task}}}{\text{P50 (Prompt + Completion Tokens)}_{\text{English, task}}}$$
-Tracked for fixed model/tokenizer versions, partitioned by intent (e.g., customer support, summarization). Alert if $R_{\text{task, lang}}$ exceeds **1.50×** for matched task categories.
+Tracked for fixed model/tokenizer versions, partitioned by intent (e.g., customer support, summarization). Establish an empirical baseline ($R_{\text{baseline}}$) during offline tokenizer profiling. Alert if $R_{\text{task, lang}}$ drifts **>20% above the validated baseline** for matched tasks—a provisional operational choice to catch vocabulary mismatches, repetitive decoding loops, or system prompt bloat without assuming an ungrounded global multiplier.

@@ -105,9 +105,8 @@ The author misread the column **`reported_tok_s`** as **generation goodput** (ou
 * For batch 24 long-prompt:
   $$\text{Total Tokens} = 24 \times (3584 + 512) = 98,304 \text{ tokens}$$
   $$\frac{98,304 \text{ tokens}}{61.16 \text{ s}} = \mathbf{1607.33 \text{ tok/s}} \quad (\text{recorded as } 1607.4)$$
-* Prompt tokens account for **87.5%** ($\frac{3584}{4096}$) of this count. They were processed in parallel during the compute-bound prefill phase in the first 500 ms!
-* Generation tokens account for only **12.5%** ($\frac{512}{4096}$), emitted autoregressively over 60.6 seconds.
-* Linear extrapolation to batch 48 was impossible because KV cache memory was already exhausted at batch 24.
+* Prompt tokens account for **87.5%** ($\frac{3584}{4096}$) of this count. Autoregressive generation represents only **12.5%** ($\frac{512}{4096}$) of the token count.
+* Linear extrapolation to batch 48 was impossible because KV cache memory was already near saturation at batch 24 (0.93 utilization).
 
 ---
 
@@ -121,7 +120,7 @@ $$\text{Goodput}_{\text{Method 1}} = \frac{24 \times 512}{61.16 \text{ s}} = \fr
 #### Method 2: Reported Throughput Multiplied by Output Token Fraction
 $$\text{Goodput}_{\text{Method 2}} = \text{reported\_tok\_s} \times \frac{\text{gen\_len}}{\text{prompt\_len} + \text{gen\_len}} = 1607.4 \times \frac{512}{4096} = 1607.4 \times 0.125 = \mathbf{200.925 \text{ output tok/s}}$$
 
-**Agreement:** Both independent derivations agree that honest output goodput is **~200.92 output tok/s**. The 0.009 tok/s difference is purely the result of 1-decimal rounding in the harness's reported 1607.4 figure. Real output goodput is **~8× lower** than the reported 1607.4 tok/s!
+**Agreement:** Both independent derivations agree that honest output goodput is **~200.92 output tok/s**. The minor 0.009 tok/s difference is consistent with rounding of recorded fields in the harness log (such as duration or reported throughput). Real output goodput is **~8× lower** than the reported 1607.4 tok/s!
 
 ---
 
@@ -132,17 +131,16 @@ Comparing short vs long prompts at the **same batch size of 16**:
   $$\text{Output Goodput} = \frac{16 \times 256}{13.91} = \mathbf{294.46 \text{ output tok/s}}$$
 * **Long Prompt (Row 11, batch 16, prompt 3584, gen 512, wall 49.97s):**
   $$\text{Output Goodput} = \frac{16 \times 512}{49.97} = \mathbf{163.94 \text{ output tok/s}}$$
-* **Degradation:**
+* **Observed Difference:**
   $$\frac{294.46 - 163.94}{294.46} = \mathbf{44.3\% \text{ reduction in output goodput}}$$
 
-Longer prompts do **not** improve generation throughput; they cause a **44.3% drop in output goodput** at batch 16 because reading larger KV caches at each autoregressive decode step saturates memory bandwidth (300 GB/s on L4).
+Comparing these rows shows a **44.3% drop in output goodput** at batch 16. Note that between Row 6 and Row 11, both prompt length (512 to 3584) and generation length (256 to 512) change. Bandwidth pressure from scanning larger KV caches during decode and prefill overhead are plausible mechanisms, which serving telemetry would verify.
 
 ---
 
 ### 4. Important Caveat: End-to-End Latency vs Wall-Clock Time
 
-In `bench_log.csv`, **12 of 13 rows report `e2e_ms_p95` greater than `wall_clock_s`**. For example, in Row 1, `wall_clock_s = 10.94s`, yet `e2e_ms_p95 = 12.86s`.
-* *Reason:* `e2e_ms_p95` is measured by the client benchmarking harness, capturing client-side socket setup, HTTP transmission, and response decoding overhead. In contrast, `wall_clock_s` measures the server's internal batch execution time. These columns should not be treated as perfectly reconciled.
+Twelve of thirteen rows have p95 latency exceeding the recorded run duration. The supplied files do not explain the measurement boundaries. Client/server timing differences are one hypothesis; harness instrumentation is needed to resolve this. Avoid treating client latency percentiles and server wall-clock as perfectly reconciled.
 
 ---
 
@@ -154,6 +152,6 @@ $$\mathbf{vllm:num\_preemptions\_total}$$
 
 **Expected behavior:**
 * In vLLM, `num_preemptions_total` is a cumulative counter of **preemption events** (increments each time an active sequence is preempted).
-* For batch sizes **$\le 24$**: The counter remains at **0**, while `vllm:gpu_cache_usage_factor` scales up to **0.93**.
-* At batch **32**: Preemptions begin occurring (at least 7 preemption events corresponding to the 7 preempted sequences), while GPU cache utilization pegs at **0.97**.
-* At batch **48**: Preemptions surge (at least 23 preemption events).
+* For batch sizes **$\le 24$**: The counter's increase ($\Delta$) during the run should be **zero**, while `vllm:gpu_cache_usage_factor` scales up to **0.93**.
+* At batch **32**: Preemptions begin occurring (with the counter increasing by at least 7 under the assumed serving implementation), while GPU cache utilization pegs at **0.97**.
+* At batch **48**: The counter increases further (by at least 23 events).

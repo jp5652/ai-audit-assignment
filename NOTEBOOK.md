@@ -70,16 +70,11 @@
 
 ### 1.4 Suspicious Feature Audit: `unicodedata.normalize("NFC", line)`
 * **Suspicion:** A junior reviewer might suspect that normalizing lines to NFC alters native Indic characters or mutates data.
-* **Experiment:** Analyzed Indic words containing combining nuktas and matras (e.g. `क़िला`, `फ़िल्म`) in both NFC and decomposed NFD:
-  ```python
-  s_nfc = '\u0958'  # Devanagari Qa (precomposed)
-  s_nfd = unicodedata.normalize('NFD', s_nfc)  # Ka + Nukta
-  # Result:
-  # NFC: 1 char, 3 UTF-8 bytes, 2 GPT-2 tokens
-  # NFD: 2 chars, 6 UTF-8 bytes, 4 GPT-2 tokens (+100% token explosion!)
-  ```
-* **Result & Evidence:** NFD doubles byte counts and increases tokenization fragments by up to 50–100%. NFC is the official Unicode standard (UAX #15) and standardizes text before subword BPE tokenization.
-* **Conclusion:** `unicodedata.normalize("NFC", line)` is **harmless and strictly correct**. Flagging it as a bug would be an error.
+* **Experiment:** Analyzed Indic words containing combining nuktas and matras (e.g. `क़िला`, `फ़िल्म`, `ज़रूरत`, `गाड़ी`) in both NFC and decomposed NFD.
+* **Result & Evidence:** 
+  * Under Python's `unicodedata`, Devanagari words maintain **identical UTF-8 byte lengths** (e.g., 18 bytes vs 18 bytes) and **identical token counts** (12 tokens vs 12 tokens in GPT-2) across NFC and NFD (delta = 0).
+  * NFC normalization is standard defensive hygiene (UAX #15) ensuring canonical representation across heterogeneous inputs, but it does not alter token counts for these words.
+* **Conclusion:** `unicodedata.normalize("NFC", line)` is **harmless and strictly correct**. Flagging it as a bug would be an error. (Note: Our primary defensible proof of a "suspicious but correct" behavior is Experiment 1.5, `add_special_tokens=False`).
 
 ### 1.5 Suspicious Feature Audit: `add_special_tokens=False`
 * **Suspicion:** Does omitting BOS/EOS undercount tokens?
@@ -166,13 +161,13 @@
 ### 4.3 Column Misread & Honest Goodput (B3)
 * `reported_tok_s` measured total throughput (prefill + decode tokens/sec).
 * Prompt tokens constituted 87.5% of total tokens processed.
-* Honest goodput of batch 24:
-  * Method 1: $12,288 \text{ gen tokens} / 61.16\text{s} = \mathbf{200.9 \text{ tok/s}}$
-  * Method 2: $24 / 0.09607\text{s ITL} = \mathbf{249.8 \text{ tok/s}}$
-  * True output goodput is ~201–250 tok/s, ~8× lower than the reported 1607 tok/s!
+* Honest goodput of batch 24 derived via two agreeing whole-run methods:
+  * Method 1 (Gen tokens / Wall-clock): $(24 \times 512) / 61.16\text{s} = \mathbf{200.916 \text{ output tok/s}}$
+  * Method 2 (Reported throughput × Output fraction): $1607.4 \times (512 / 4096) = \mathbf{200.925 \text{ output tok/s}}$
+  * Both methods agree on **~200.92 output tok/s**, roughly 8× lower than the reported 1607.4 tok/s!
 
 ### 4.4 Production Metric (B4)
-* Pull `vllm:num_preemptions_total`. Expected values: 0 for batch $\le 24$, 7 at batch 32, 23 at batch 48.
+* Pull `vllm:num_preemptions_total`. Expected values: counter increase ($\Delta$) is 0 for batch $\le 24$, $\ge 7$ at batch 32, $\ge 23$ at batch 48.
 
 ---
 
@@ -184,7 +179,7 @@
   * Path (b) (Rewriter): Doubles latency, doubles memory overhead, compound errors. Disqualified.
   * Path (a) (SFT): Fine-tuning weights risks unmonitored catastrophic forgetting in 4 of 6 languages with no reviewer to catch failures. Disqualified.
   * Path (c) (Prompt Engineering): Zero training risk, zero catastrophic degradation, enables daily iteration starting Day 1. Selected.
-* **Framework Defined:** Assumptions, 480-review arithmetic, 3.8/5.0 casualness threshold, 98% factual preservation guardrail, Day-6 kill criterion, and Day-1 experiment with 4 prompt arms.
+* **Framework Defined:** Assumptions, 480-review arithmetic, 3.5/5.0 casualness threshold, 98% factual preservation guardrail, Day-6 kill criterion, and Day-1 experiment with 4 prompt arms.
 
 ---
 
@@ -195,19 +190,19 @@ Following internal review and rigorous verification against the evidence rule, s
 ### 6.1 NFC Evidence Reconciliation
 * **Finding:** In `partA/run_audit_experiments.py`, our initial explanation asserted that decomposed NFD increases token counts by 50–100%. However, our printed experiment table on sample Devanagari words (`फ़िल्म`, `ज़रूरत`, `क़िला`, `गाड़ी`) showed **identical bytes (18 vs 18) and identical tokens (12 vs 12)** across NFC and NFD.
 * **Correction:** We removed the contradictory narrative. In standard Unicode (UAX #15), Devanagari nukta characters possess composition exclusions, so NFC and NFD maintain identical decomposition under Python's `unicodedata`. Normalizing to NFC is benign (delta = 0).
-* **Primary Defensible Finding:** Our primary empirically verified "suspicious but fine" example is `add_special_tokens=False` (Experiment 5), which demonstrated a real, measured **+21.4% artificial inflation** when special tokens were added.
+* **Primary Defensible Finding:** Our primary empirically verified "suspicious but fine" example is `add_special_tokens=False` (Experiment 5), which demonstrated a real, measured **+21.42% artificial inflation** when special tokens were added.
 
 ### 6.2 Serving Goodput Derivation (B3)
 * **Finding:** Our previous write-up presented a goodput range of 201–250 tok/s by dividing batch size by median ITL ($24 / 0.09607\text{s} = 249.8$). However, dividing by median ITL measures instantaneous decode-step rate, not whole-run throughput.
 * **Correction:** We derived goodput using the two agreeing whole-run methods:
   1. *Generated tokens / wall-clock time:* $(24 \times 512) / 61.16 = \mathbf{200.916 \text{ output tok/s}}$
   2. *Reported throughput × output token fraction:* $1607.4 \times (512 / 4096) = \mathbf{200.925 \text{ output tok/s}}$
-  Both independent methods agree on **~200.92 output tok/s** (the 0.009 difference is purely harness 1-decimal rounding). Output goodput is ~8× lower than reported total throughput.
-* **Corrected Degradation:** Comparing short vs. long prompt at matched batch size 16: short prompt delivered 294.46 output tok/s; long prompt delivered 163.94 output tok/s. This represents a **44.3% reduction** (correcting our prior "over 70%" estimate).
+  Both independent methods agree on **~200.92 output tok/s** (the 0.009 difference is consistent with rounding in recorded log fields). Output goodput is ~8× lower than reported total throughput.
+* **Corrected Degradation:** Comparing short vs. long prompt at matched batch size 16: short prompt delivered 294.46 output tok/s; long prompt delivered 163.94 output tok/s. This represents a **44.3% reduction** (correcting our prior "over 70%" estimate). Both prompt length and generation length change, so bandwidth pressure and prefill overhead are plausible mechanisms to verify with telemetry.
 
 ### 6.3 Serving Preemption Semantics & Latency Discrepancy (B1, B2)
 * **Preempted Sequences:** `preempted_seqs` records sequences preempted at least once, not static simultaneous occupancy. The log is consistent with an approximate ~25-sequence physical capacity, and two-wave completion (122.32s) is a model prediction with batching assumptions.
-* **Latency vs Wall Clock:** In `bench_log.csv`, 12 of 13 rows report `e2e_ms_p95 > wall_clock_s` because client-side harness latency includes connection setup and dispatch, while wall-clock measures the server-side batch window.
+* **Latency vs Wall Clock:** Twelve of thirteen rows have p95 latency exceeding the recorded run duration. The supplied files do not explain the measurement boundaries. Client/server timing differences are one hypothesis; harness instrumentation is needed to resolve this. We avoid presenting untested hypotheses as proven facts.
 
 ### 6.4 Conditional Production Cost Recommendation (A4)
 * **Finding:** XLM-R's 1.25–1.35× ratio disproves a universal 6× script penalty, but cannot be transferred directly to FLM-4B. Our own Qwen2.5 test showed 4.42–6.99× ratios despite a 152k vocabulary.
@@ -217,3 +212,11 @@ Following internal review and rigorous verification against the evidence rule, s
 * **KV Memory Math:** Adding 35 prompt tokens per sequence adds $35 \times 112 \text{ KiB} = \mathbf{3.83 \text{ MiB per sequence}}$, totaling $\mathbf{91.88 \text{ MiB}}$ across 24 sequences (correcting the erroneous $0.96\text{ KiB}$ calculation).
 * **Context Limit Tradeoff:** Adding 35 tokens to a 3,584-token prompt generating 512 tokens yields 4,131 tokens, exceeding `max_model_len` (4096). Context must be managed by trimming prompt history or capping generation.
 * **Reviewer Plan & Feasible Fallback:** Day-1 screening requires 120 paired comparisons ($40 \text{ queries} \times 3 \text{ treatment arms} = 120$ pairs = 5.0 hours). The Day-7 fallback to an unbudgeted SFT training run was replaced with a feasible kill action: retain the formal baseline for launch and gate casualization to validated languages. Both memos condensed to $\le 1$ page.
+
+### 6.6 Production Alert Baseline & Operational Threshold
+* **Finding:** Alerting at a rigid 1.50× expansion threshold was unjustified when tokenizers like Qwen2.5 operate normally at 4.42–6.99×.
+* **Correction:** Replaced the hardcoded threshold with an operational relative rule: alert if token expansion drifts **>20% above the validated task baseline**, explicitly labeled as a provisional operational choice.
+
+### 6.7 Reviewer Budget Reconciliation & Separate Language Thresholds
+* **Finding:** Stating "240 paired evaluations + edge cases" in Week 2 exceeded the 10-hour reviewer budget, and asserting baseline casualness as $\le 2.2/5$ lacked empirical support.
+* **Correction:** Reconciled Week 2 budget as 200 held-out evaluations + 40 safety/edge-case checks = exactly 240 evaluations (10.0 hours). Clarified that baseline casualness is to be measured empirically on Day 1, and that the $\ge 3.5/5.0$ threshold must pass separately for Hindi and Kannada.

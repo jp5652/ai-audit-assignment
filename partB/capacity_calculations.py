@@ -167,7 +167,7 @@ def calculate_b3():
     print(f"  Method 2 (Reported throughput * Output token fraction):")
     print(f"    {reported_tok_s} * ({gen_len} / {total_len}) = {reported_tok_s} * {output_token_fraction:.3f} = {goodput_method2:.3f} output tok/s")
     print(f"  Agreement: Both independent derivations confirm honest goodput is ~{goodput_method1:.2f} output tok/s.")
-    print(f"  (Difference of {abs(goodput_method1 - goodput_method2):.3f} is purely due to 1-decimal rounding in the harness's reported 1607.4 tok/s).")
+    print(f"  (The minor {abs(goodput_method1 - goodput_method2):.3f} difference is consistent with rounding of recorded fields in the harness log, such as duration or reported throughput rounded to 1-2 decimal places).")
     print(f"  Crucial insight: Real output goodput is ~8x lower than the intern's reported 1607.4 tok/s!\n")
 
     # Matched comparison: Batch 16 short vs long prompt
@@ -187,12 +187,9 @@ def print_latency_note():
     print("\n" + "=" * 75)
     print("NOTE ON LATENCY VS WALL-CLOCK COLUMNS (Caveat for Defense)")
     print("=" * 75)
-    print("In bench_log.csv, 12 of 13 rows report e2e_ms_p95 > wall_clock_s.")
-    print("For example, Row 1 reports wall_clock = 10.94s, but e2e_ms_p95 = 12.86s.")
-    print("Reason: e2e_ms_p95 is measured by the client benchmarking harness, capturing")
-    print("client-side socket connection, HTTP dispatch, and response parsing overhead,")
-    print("whereas wall_clock_s measures the server's internal batch processing window.")
-    print("Avoid treating client latency percentiles and server wall-clock as perfectly reconciled.")
+    print("Twelve of thirteen rows have p95 latency exceeding the recorded run duration.")
+    print("The supplied files do not explain the measurement boundaries. Client/server timing")
+    print("differences are one hypothesis; harness instrumentation is needed to resolve this.")
 
 
 if __name__ == "__main__":

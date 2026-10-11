@@ -12,6 +12,7 @@ This repository contains the complete, reproduction-verified audit of the previo
 
 ```text
 my-submission/
+├── requirements.txt                   # Pinned dependencies for reproduction
 ├── NOTEBOOK.md                        # Chronological research lab notebook (Hypothesis → Experiment → Result → Revision)
 ├── AI_USAGE.md                        # Transparent record of AI usage and verified hallucinations
 ├── partA/
@@ -39,7 +40,7 @@ my-submission/
 ```bash
 git clone <your-repo-url>
 cd my-submission
-pip install tiktoken transformers
+pip install -r requirements.txt
 ```
 
 ### 2. Run Audit Experiments (Part A)
@@ -84,7 +85,7 @@ python partB/capacity_calculations.py
 ### Part B: Serving Capacity Reconciliation
 * **KV Cache Per Token:** Exactly **114,688 bytes (112 KiB)** in fp16.
 * **Concurrency Ceiling:** Max concurrent 4096-token sequences on 1× NVIDIA L4 (24 GB) is **~25 sequences**, consistent with `bench_log.csv` (cache saturates at 0.97 with 7 and 23 sequences preempted).
-* **Throughput Anomaly:** Batches 32 and 48 suffer preemption thrashing (re-evaluating 3,584 prompt tokens from scratch) due to KV memory exhaustion. Capping concurrency at `--max-num-seqs 24` eliminates preemptions and preserves peak throughput (~1,607 tok/s).
+* **Throughput Anomaly:** Batches 32 and 48 suffer preemption thrashing (re-evaluating 3,584 prompt tokens from scratch) due to KV memory saturation. Under the modeled preemption mechanics, setting concurrency cap `--max-num-seqs 24` is predicted to avoid thrashing and prevent preemptions, processing requests in structured waves rather than overcommitting the KV cache.
 * **Column Misread:** `reported_tok_s` measured total throughput (87.5% was prompt prefill). Honest generation goodput for batch 24 long-prompt is **~200.92 output tok/s** (derived via two independent agreeing methods), roughly 8× lower than reported. At matched batch 16, longer prompts reduce output goodput by **44.3%** (from 294.46 to 163.94 tok/s).
 
 ### Part C: Strategic Decision Memo

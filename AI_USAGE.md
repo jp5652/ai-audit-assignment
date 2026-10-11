@@ -42,3 +42,8 @@ This document provides a transparent, unsparing account of where AI tools assist
 * *What AI Suggested:* The AI initially asserted that XLM-R's 1.25–1.35× ratio proved that FLM-4B serving costs could be budgeted at 1.30× with 78% infrastructure savings.
 * *How it was Caught:* Our own benchmark on Qwen2.5 showed token ratios of 4.42–6.99× despite having a 152k vocabulary. Because FLM-4B's proprietary tokenizer was not provided in the kit, assuming XLM-R's efficiency was an unjustified transfer.
 * *Correction:* Reframed the recommendation as conditional on direct tokenizer profiling of FLM-4B.
+
+#### Incident 6: Inventing an Untested Explanation for Latency vs Wall Clock
+* *What AI Suggested:* The AI asserted with certainty that `e2e_ms_p95 > wall_clock_s` occurred because `e2e_ms_p95` captures client-side HTTP socket dispatch overhead while `wall_clock_s` measures server-side execution.
+* *How it was Caught:* Reviewing the assignment specification revealed that neither `model_spec.md` nor `bench_log.csv` nor any harness code defines the measurement boundaries. Presenting an untested hypothesis as empirical fact directly violates the assignment's evidence integrity standard.
+* *Correction:* Replaced the speculative claim with the honest, evidence-grounded statement: 12 of 13 rows have p95 latency exceeding run duration; client/server timing differences are one hypothesis, but harness instrumentation is required to resolve it.

@@ -136,6 +136,8 @@ def run_experiment_2_lowercase():
         
         delta_toks = total_toks_low - total_toks_cased
         pct_toks = (delta_toks / total_toks_cased) * 100
+        if name == "Starter English":
+            eng_pct_toks = pct_toks
         
         print(f"[{name}]")
         print(f"  Tokens cased (original): {total_toks_cased}")
@@ -148,8 +150,8 @@ def run_experiment_2_lowercase():
         c_toks = enc.encode(l)
         l_toks = enc.encode(l.lower())
         if len(c_toks) != len(l_toks):
-            print(f"    Line {i+1}: cased({len(c_toks)}) -> lower({len(l_toks)}) | text: {l}")
-    print("  Explanation: gpt2 BPE includes capitalized tokens (e.g., 'Quarterly', 'NASA', 'GPU'); lowercasing forces subword splits into extra tokens, artificially penalizing English by +3.5% while leaving uncased Indic script completely unchanged.")
+            print(f"    Line {i+1}: cased={len(c_toks)} toks -> lower={len(l_toks)} toks ('{l.strip()[:40]}...')")
+    print(f"  Explanation: gpt2 BPE includes capitalized tokens (e.g., 'Quarterly', 'NASA', 'GPU'); lowercasing forces subword splits into extra tokens, artificially penalizing English by {eng_pct_toks:+.2f}% while leaving uncased Indic script completely unchanged.")
 
 
 def run_experiment_3_aggregation():
@@ -241,11 +243,12 @@ def run_experiment_5_special_tokens():
     
     fert_with = sum(t/w for t, w in zip(with_special, words)) / len(lines)
     fert_no = sum(t/w for t, w in zip(no_special, words)) / len(lines)
+    pct_special = ((fert_with - fert_no) / fert_no) * 100
     
     print(f"  XLM-R fertility with BOS/EOS (add_special_tokens=True):  {fert_with:.4f}")
     print(f"  XLM-R fertility pure text   (add_special_tokens=False): {fert_no:.4f}")
-    print(f"  Delta: {fert_with - fert_no:+.4f} ({((fert_with - fert_no)/fert_no)*100:+.2f}%)")
-    print("  Explanation: Adding BOS/EOS introduces a constant +2 tokens per line regardless of sentence length, artificially inflating short sentence fertility by ~19%.")
+    print(f"  Delta: {fert_with - fert_no:+.4f} ({pct_special:+.2f}%)")
+    print(f"  Explanation: Adding BOS/EOS introduces a constant +2 tokens per line regardless of sentence length, artificially inflating short sentence fertility by {pct_special:.2f}%.")
 
 
 if __name__ == "__main__":
