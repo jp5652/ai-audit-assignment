@@ -146,12 +146,11 @@ Twelve of thirteen rows have p95 latency exceeding the recorded run duration. Th
 
 ## B4. Production Verification Metric
 
-To confirm the memory exhaustion and preemption mechanism in production, pull the Prometheus metric:
+To confirm the memory exhaustion and preemption mechanism in production, pull the single Prometheus metric:
 $$\mathbf{vllm:num\_preemptions\_total}$$
-*(alongside `vllm:iteration_tokens_total{status="recompute"}`).*
 
 **Expected behavior:**
 * In vLLM, `num_preemptions_total` is a cumulative counter of **preemption events** (increments each time an active sequence is preempted).
-* For batch sizes **$\le 24$**: The counter's increase ($\Delta$) during the run should be **zero**, while `vllm:gpu_cache_usage_factor` scales up to **0.93**.
-* At batch **32**: Preemptions begin occurring (with the counter increasing by at least 7 under the assumed serving implementation), while GPU cache utilization pegs at **0.97**.
+* For batch sizes **$\le 24$**: The counter's increase ($\Delta$) during the run should be **zero**.
+* At batch **32**: Preemptions begin occurring (with the counter increasing by at least 7 under the assumed serving implementation).
 * At batch **48**: The counter increases further (by at least 23 events).

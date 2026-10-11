@@ -151,12 +151,12 @@
   * Batch 24: $24 / 0.93 = \mathbf{25.8}$
   * Batch 32: $32 - 7 \text{ preemptions} = \mathbf{25.0}$
   * Batch 48: $48 - 23 \text{ preemptions} = \mathbf{25.0}$
-  Exact agreement between theory and log.
+  Exact agreement between theory and log. *(Original hypothesis; superseded by the corrections in Entry 6—preempted_seqs records sequences preempted at least once rather than static simultaneous occupancy, indicating consistency with an approximate ~25-sequence physical capacity rather than exact identity).*
 
 ### 4.2 Anomaly Mechanism (B2)
 * At batch 32 and 48, throughput collapses from 1607 tok/s to 1384 and 1298 tok/s because the engine exhausts KV cache blocks (`kv_cache_util = 0.97`).
 * Preemptions occur (7 at batch 32, 23 at batch 48), triggering re-prefill thrashing.
-* Proposed fix: Cap `max_num_seqs = 24`. Eliminates preemptions, prevents thrashing, preserves 1607 tok/s throughput, and finishes 48 requests in 122.3s instead of 151.4s (19.2% speedup).
+* Proposed fix: Cap `max_num_seqs = 24`. Eliminates preemptions, prevents thrashing, preserves 1607 tok/s throughput, and finishes 48 requests in 122.3s instead of 151.4s (19.2% speedup). *(Original hypothesis; superseded by the corrections in Entry 6—concurrency-cap throughput preservation and two-wave duration are model-based predictions under batching assumptions rather than guaranteed measurements).*
 
 ### 4.3 Column Misread & Honest Goodput (B3)
 * `reported_tok_s` measured total throughput (prefill + decode tokens/sec).
@@ -176,7 +176,7 @@
 * **Constraint Analysis:** 1 A100 for 2 weeks, 1 reviewer for 10 h/week in Hindi + Kannada only, 3 weeks to launch, \$0 API budget.
 * **The Reviewer Blindspot:** Only 480 total human reviews possible ($20 \text{ hrs} \times 60 / 2.5 \text{ min}$). Tamil, Telugu, Bengali, and Marathi have ZERO native speakers available.
 * **Path Elimination:**
-  * Path (b) (Rewriter): Doubles latency, doubles memory overhead, compound errors. Disqualified.
+  * Path (b) (Rewriter): Doubles latency, doubles memory overhead, compound errors. Disqualified. *(Original hypothesis; superseded by the corrections in Entry 6—rewriters add serialized execution and memory pressure, though exact latency and memory scaling depend on specific rewriter architecture).*
   * Path (a) (SFT): Fine-tuning weights risks unmonitored catastrophic forgetting in 4 of 6 languages with no reviewer to catch failures. Disqualified.
   * Path (c) (Prompt Engineering): Zero training risk, zero catastrophic degradation, enables daily iteration starting Day 1. Selected.
 * **Framework Defined:** Assumptions, 480-review arithmetic, 3.5/5.0 casualness threshold, 98% factual preservation guardrail, Day-6 kill criterion, and Day-1 experiment with 4 prompt arms.

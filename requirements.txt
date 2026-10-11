@@ -1,4 +1,11 @@
-# Pinned dependencies for reproduction of the audit experiments
-tiktoken>=0.7.0
-transformers>=4.40.0
-requests>=2.28.0
+# Exact pinned package versions used for reproducing the benchmark and audit
+tiktoken==0.14.0
+transformers==5.19.0
+requests==2.34.2
+
+# Evaluated Hugging Face Tokenizers & Revisions:
+# - xlm-roberta-base (SentencePiece, 250k vocab, default revision)
+# - Qwen/Qwen2.5-0.5B (BPE, 152k vocab, default revision)
+# Evaluated tiktoken encoding:
+# - gpt2 (r50k_base, 50,257 vocab)
+# Python runtime: 3.12.10
